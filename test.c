@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 int main(){
 /*    
 char array[20]="hello world";
@@ -32,10 +36,10 @@ for(i=0;i<3;i++){
 
     if(strcmp(b[i],"<") == 0){
 
-        printf("%d",i);
+        printf("%d\n",i);
     }
 
-    printf("%s",b[i]);
+    printf("%s\n",b[i]);
 }
 b[3]=NULL;
 /*
@@ -45,6 +49,7 @@ b[i]=NULL;
 
 }*/
 /*测试后台运行*/
+
 int pid; 
 if ((pid = fork()) < 0) {
     err_sys("fork error");
@@ -65,11 +70,27 @@ if ((pid = fork()) < 0) {
     
     */
     /*freopen( "/dev/null", "w", stdout );输出重定向到null，这样就不会输出东西来了*/
+	int fd;
+	fd = open("/home/zzy/Document/apue.3e/zzy/test.txt",O_WRONLY|O_CREAT,777);
 
+	if(fd <0){
+		printf("file open error\n");
+
+		return 1;
+	}
+    printf("file open right\n");
+	if(dup2(fd,STDOUT_FILENO) < 0)    {
+        close(fd);
+        return 1; /* this can return  normally */
+    }
 
     sleep(2);
     printf("second child, parent pid = %ld\n", (long)getppid());
+
+    close(fd);/*关闭文件*/
+
     exit(0);
+    
 }
 
 
@@ -77,7 +98,7 @@ if ((pid = fork()) < 0) {
 if (waitpid(pid, NULL, 0) != pid)	/* wait for first child */
     err_sys("waitpid error");
 
-printf("parent");
+printf("parent\n");
 /*这一块验证，孙子进程将输出重定向到null之后，父进程仍然会输出parent*/
 
 
