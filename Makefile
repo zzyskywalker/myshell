@@ -2,7 +2,7 @@ ROOT=..
 PLATFORM=$(shell $(ROOT)/systype.sh)
 include $(ROOT)/Make.defines.$(PLATFORM)
 
-PROGS =	zzyshell test test2 test3
+PROGS =	zzyshell test test2 test3 
 
 all:	$(PROGS)
 

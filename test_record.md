@@ -18,3 +18,6 @@ aaaabbbbb2<aaaabbbbb2<parentzzy@VM-20-4-ubuntu:~/Document/apue.3e/zzy$ aaaabbbbb
 ```
 
 有一些重复的输出。是不是和buffer有关？
+
+
+可以使用输入重定向的命令，wc cat
