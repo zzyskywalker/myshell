@@ -64,7 +64,7 @@ main(void)
 		}else{
 			
 			
-			foreground();
+			excutecmd();
 		};
 			*/
 		if (fputs(command_prompt, stdout) == EOF)
@@ -129,53 +129,76 @@ void splitcmd(char *buf){
 	*/
 
 }
-
-
 void excutecmd(){
-	
 	int pid;
-	char* backargv[argc+1];
-	int fd=STDIN_FILENO;
-	int i;
+	char* inbackargv[argc+1];
+	char* outbackargv[argc+1];
+	int outfd=STDOUT_FILENO;
+	int infd =STDIN_FILENO;
+	
     int pipefd[2];
 
-    char tempbuf[1];
+    char outtempbuf[1];
+	char intempbuf[1];
 
     if(pipe(pipefd)<0) /*为了从子进程将fd传到父进程，然后父进程关闭fd*/
         err_sys("pipe error");
-
+	int i;
 	for(i=0;i<argc;i++){   /*备份一下argv，因为要进行修改*/
 		int length = strlen(argv[i]);
-		backargv[i] = (char *)malloc(length);
-		strcpy(backargv[i],argv[i]);
+		inbackargv[i] = (char *)malloc(length);
+		strcpy(inbackargv[i],argv[i]);
 
 	};
-    backargv[argc]= NULL;
+    inbackargv[argc]= NULL;
+	for(i=0;i<argc;i++){   /*备份一下argv，因为要进行修改*/
+		int length = strlen(argv[i]);
+		outbackargv[i] = (char *)malloc(length);
+		strcpy(outbackargv[i],argv[i]);
+
+	};
+    outbackargv[argc]= NULL;
     
     
 	if ((pid = fork()) < 0) {
 		err_sys("fork error");
 	} else if (pid == 0) {		/* child */
 
-		if(out_redirect){
-            fd = output_redirect(backargv);
+		if(in_redirect){
 
+			infd = input_redirect(inbackargv);
             /*将重定向的fd转换成字符串并通过通道传到父进程*/
-            int bytes = sprintf(tempbuf, "%d\n", fd); 
-            printf("%s",tempbuf);
+            int bytes = sprintf(intempbuf, "%d", infd); 
             close(pipefd[0]);
-            write(pipefd[1], tempbuf, 1);
+            write(pipefd[1], intempbuf, 1);
 		};
 
+		if(out_redirect){
+            outfd = output_redirect(outbackargv);
+            /*将重定向的fd转换成字符串并通过通道传到父进程*/
+            int bytes = sprintf(outtempbuf, "%d", outfd); 
+            /*printf("%s",outtempbuf);*/
+			
+            close(pipefd[0]);
+            write(pipefd[1], outtempbuf, 1);
+			
+		};
+		if(in_redirect){
+				execvp(inbackargv[0], inbackargv);
+				err_ret("couldn't execute: %s", inbackargv[0]);
+		}else{
 
-		execvp(backargv[0], backargv);
-
-    	if (fd != STDIN_FILENO) {
-                
-                close(fd);
-                printf("close file\n");
+				execvp(outbackargv[0], outbackargv);
+				err_ret("couldn't execute: %s", outbackargv[0]);
+		};
+    	if (outfd != STDOUT_FILENO) {
+    		    close(outfd); 
             }
-		err_ret("couldn't execute: %s", backargv[0]);
+
+		if (infd != STDIN_FILENO) {
+                close(infd);
+            }
+		
 		exit(127);
 
 
@@ -190,26 +213,46 @@ void excutecmd(){
 
 	if(out_redirect){
         close(pipefd[1]);
-        if(read(pipefd[0], tempbuf, 1)<0)
+        if(read(pipefd[0], outtempbuf, 1)<0)
             printf("read error");
-        fd = tempbuf[0]-'0';
-    }
+        outfd = outtempbuf[0]-'0';
 
-    if (fd != STDIN_FILENO) {
+		if (outfd != STDOUT_FILENO) {
             
-            close(fd);
+            close(outfd);
             /*printf("close file\n");*/
         }
+    }
+
+
+	
+	if(in_redirect){
+        close(pipefd[1]);
+        if(read(pipefd[0], intempbuf, 1)<0)
+            printf("read error");
+        infd = intempbuf[0]-'0';
+
+		if (infd != STDIN_FILENO) {
+            
+            close(infd);
+            /*printf("close file\n");*/
+        }
+    }
+
 
 	/*printf("%s finished\n",parameter[0]);*/
 	int j;
 	for(j=0;j<argc;j++){
 
-		free(backargv[j]);
-		backargv[j] = NULL;
+		free(inbackargv[j]);
+		inbackargv[j] = NULL;
+		free(outbackargv[j]);
+		outbackargv[j] = NULL;
 	}
 
+
 }
+
 
 int is_redirect(){
 	int i;
@@ -267,42 +310,39 @@ void background(){
 
 }
 
-void foreground(){
 
-	int pid;
+int input_redirect(char* backargv[argc+1]){
 
-	if ((pid = fork()) < 0) {
-		err_sys("fork error");
-	} else if (pid == 0) {		/* child */
-		execvp(argv[0], argv);
-		err_ret("couldn't execute: %s", argv[0]);
-		exit(127);
-	}
-
-	/* parent */
-	if ((pid = waitpid(pid, NULL, 0)) < 0)
-		err_sys("waitpid error");
-	printf("%% ");
-}
-
-void input_redirect(char* argv[MAXARGS]){
-	/*这里是只有输入重定向，输入输出都重定向的在另一个函数*/
-	char* backargv[argc+1];
 	int i;
 	int redircet_sign;
-	for(i=0;i<argc;i++){
-		int length = strlen(argv[i]);
-		backargv[i] = (char *)malloc(length);
-		strcpy(backargv[i],argv[i]);
+	/*printf("input_redirect");*/
+    /*
+    printf("%s",backargv[0]);
+    printf("%s",backargv[1]);
+    printf("%s",backargv[2]);
+    printf("%s",backargv[3]);
+    */
+    for(i=0;i<argc;i++){
 
 		if(strcmp(backargv[i],"<") == 0){
-			redircet_sign = i; /*找出输入重定向符号的位置*/
+			redircet_sign = i; /*找出输出重定向符号的位置*/
 		};
 	}
-	/*这时的redircet_sign就是输入符号的分隔区域，那么后面的应该就是输入文件的路径*/
-	/* 输入重定向的话，那么，argv[redircet_sign+1]肯定是文件路径，argv[redircet_sign]是<符号*/
-	backargv[argc]=NULL;
+/*这时的redircet_sign就是输出符号的分隔区域，那么后面的应该就是输出文件的路径*/
+
+/* 输出重定向的话，那么，argv[redircet_sign+1]肯定是文件路径，argv[redircet_sign]是>符号*/
+	/*
+	printf("%d\n",redircet_sign);*/
+
 	int fd;
+    if(backargv[redircet_sign+1]==NULL){
+
+        printf("without input file path,default /dev/null\n");
+
+        backargv[redircet_sign+1]="/dev/null";
+
+    };
+	/*printf("%s\n",backargv[redircet_sign+1]);*/
 	fd = open(backargv[redircet_sign+1],O_RDONLY);
 
 	if(fd <0){
@@ -310,25 +350,17 @@ void input_redirect(char* argv[MAXARGS]){
 
 		return 1;
 	}
+	/*printf("%d",fd);*/
 	if(dup2(fd,STDIN_FILENO) < 0)    {
         close(fd);
         return 1; 
     }
-	backargv[redircet_sign] = NULL;/*把重定向符号的位置赋为NULL，这时候前面就是命令*/
+	backargv[redircet_sign]= NULL;
+	return fd;
 
-	excutecmd();/*执行重定向前面的命令*/
-
-	close(fd);/*关闭文件*/
-
-	int j;/*清空指针*/
-	for(j=0;j<argc;j++){
-
-		free(backargv[j]);
-		backargv[j] = NULL;
-	}
-	return 1;
-	
 }
+
+
 
 int output_redirect(char* backargv[argc+1]){
 

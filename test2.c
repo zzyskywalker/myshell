@@ -39,7 +39,7 @@ int main(){
     a[0] = "ls";
     a[1] = "-a";
     a[2] = NULL;
-    a[3] = "-l";
+    a[3] = NULL;
 
     excutecmd(a);
     int i;
