@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-/*命令提示符的形式*/
+/*命令提示符的形式,可以更改*/
 char command_prompt[] = "->";
 
 #define MAXARGS 128   /* 最大命令数量*/
@@ -20,16 +20,13 @@ char* argv[MAXARGS];
 int out_redirect;   /*标识是否输出重定向*/
 int in_redirect;	/*标识是否输入重定向*/
 
-
-
 void splitcmd(char *buf);
-void excutecmd();
 void background();
 void foreground();
-void input_redirect();
-void in_out_redirect();
+
 int  is_redirect();
 int output_redirect(char* backargv[argc+1]);
+int input_redirect(char* backargv[argc+1]);
 
 int
 main(void)
@@ -53,9 +50,7 @@ main(void)
 
 		splitcmd(buf);	/*在这里将命令行中的输入切分成了命令数组*/
 		is_redirect();
-		excutecmd();
-		/*
-		is_redirect();
+
 
 		if(strcmp(argv[0],"bg") == 0){
 
@@ -64,9 +59,9 @@ main(void)
 		}else{
 			
 			
-			excutecmd();
+			foreground();
 		};
-			*/
+
 		if (fputs(command_prompt, stdout) == EOF)
 			err_sys("output error");
 
@@ -129,7 +124,7 @@ void splitcmd(char *buf){
 	*/
 
 }
-void excutecmd(){
+void foreground(){
 	int pid;
 	char* inbackargv[argc+1];
 	char* outbackargv[argc+1];
@@ -276,7 +271,35 @@ int is_redirect(){
 
 void background(){
 
-    int pid;
+	int pid;
+	char* inbackargv[argc+1];
+	char* outbackargv[argc+1];
+	/*需要把前面的bg去掉，所以都前移一下*/
+	int i;
+	for(i=0;i<argc-1;i++){   /*备份一下argv，因为要进行修改*/
+		int length = strlen(argv[i+1]);
+		inbackargv[i] = (char *)malloc(length);
+		strcpy(inbackargv[i],argv[i+1]);
+
+	};
+	inbackargv[argc-1]= NULL;
+    inbackargv[argc]= NULL;
+
+	for(i=0;i<argc-1;i++){   /*备份一下argv，因为要进行修改*/
+		int length = strlen(argv[i+1]);
+		outbackargv[i] = (char *)malloc(length);
+		strcpy(outbackargv[i],argv[i+1]);
+
+	};
+    outbackargv[argc-1]= NULL;
+	outbackargv[argc]= NULL;
+
+	/*为了后台运行不输出，我们加重输出标识符，在重输出函数中输出到默认文件中*/
+	if(!out_redirect){
+	outbackargv[argc-1] = (char *)malloc(1);
+	outbackargv[argc-1] =">";
+	}
+
 	if ((pid = fork()) < 0) {
 		err_sys("fork error");
 	} else if (pid == 0) {		/* first child */
@@ -295,104 +318,72 @@ void background(){
 		上课的时候关于孤儿进程的例子，父进程退出后，子进程交给init，这样我们的shell进程就可以继续了。
 		
 		*/
-		freopen( "/dev/null", "w", stdout );/*输出重定向到null，这样就不会输出东西来了*/
 
+		/*重输出是必须的*/
+		output_redirect(outbackargv);
 
-		sleep(2);
-		printf("second child, parent pid = %ld\n", (long)getppid());
+		if(in_redirect){
+
+			input_redirect(inbackargv);
+			};
+
+		if(in_redirect){
+				execvp(inbackargv[0], inbackargv);
+				err_ret("couldn't execute: %s", inbackargv[0]);
+		}else{
+
+				execvp(outbackargv[0], outbackargv);
+				err_ret("couldn't execute: %s", outbackargv[0]);
+		};
+
 		exit(0);
 	}
+
 
 	if (waitpid(pid, NULL, 0) != pid)	/* wait for first child */
 		err_sys("waitpid error");
 
+	int j;
+	for(j=0;j<argc-1;j++){
 
+		free(inbackargv[j]);
+		inbackargv[j] = NULL;
+		free(outbackargv[j]);
+		outbackargv[j] = NULL;
+	}
 
 }
-
-
-int input_redirect(char* backargv[argc+1]){
-
-	int i;
-	int redircet_sign;
-	/*printf("input_redirect");*/
-    /*
-    printf("%s",backargv[0]);
-    printf("%s",backargv[1]);
-    printf("%s",backargv[2]);
-    printf("%s",backargv[3]);
-    */
-    for(i=0;i<argc;i++){
-
-		if(strcmp(backargv[i],"<") == 0){
-			redircet_sign = i; /*找出输出重定向符号的位置*/
-		};
-	}
-/*这时的redircet_sign就是输出符号的分隔区域，那么后面的应该就是输出文件的路径*/
-
-/* 输出重定向的话，那么，argv[redircet_sign+1]肯定是文件路径，argv[redircet_sign]是>符号*/
-	/*
-	printf("%d\n",redircet_sign);*/
-
-	int fd;
-    if(backargv[redircet_sign+1]==NULL){
-
-        printf("without input file path,default /dev/null\n");
-
-        backargv[redircet_sign+1]="/dev/null";
-
-    };
-	/*printf("%s\n",backargv[redircet_sign+1]);*/
-	fd = open(backargv[redircet_sign+1],O_RDONLY);
-
-	if(fd <0){
-		printf("file open error\n");
-
-		return 1;
-	}
-	/*printf("%d",fd);*/
-	if(dup2(fd,STDIN_FILENO) < 0)    {
-        close(fd);
-        return 1; 
-    }
-	backargv[redircet_sign]= NULL;
-	return fd;
-
-}
-
-
 
 int output_redirect(char* backargv[argc+1]){
 
 	int i;
 	int redircet_sign;
-    /*
-    printf("%s",backargv[0]);
-    printf("%s",backargv[1]);
-    printf("%s",backargv[2]);
-    printf("%s",backargv[3]);
-    */
+/*
+    printf("%s\n",backargv[0]);
+    printf("%s\n",backargv[1]);
+    printf("%s\n",backargv[2]);
+    printf("%s\n",backargv[3]);
+*/
     for(i=0;i<argc;i++){
-
-		if(strcmp(backargv[i],">") == 0){
-			redircet_sign = i; /*找出输出重定向符号的位置*/
-		};
+		if(backargv[i]!=NULL){
+			if(strcmp(backargv[i],">") == 0){
+				redircet_sign = i; /*找出输出重定向符号的位置*/
+			};
+		}
 	}
 /*这时的redircet_sign就是输出符号的分隔区域，那么后面的应该就是输出文件的路径*/
 
 /* 输出重定向的话，那么，argv[redircet_sign+1]肯定是文件路径，argv[redircet_sign]是>符号*/
-	/*
-	printf("%d\n",redircet_sign);*/
 
 	int fd;
     if(backargv[redircet_sign+1]==NULL){
+		backargv[redircet_sign+1] =(char *)malloc(9);
+		backargv[redircet_sign+1]="noout.txt";
+        printf("without input outfile path,default noout.txt\n");
 
-        printf("without input file path");
-
-        backargv[redircet_sign+1]="/dev/null";
+        
 
     };
-	/*printf("%s\n",backargv[redircet_sign+1]);*/
 	fd = open(backargv[redircet_sign+1],O_WRONLY|O_CREAT,0777);
 
 	if(fd <0){
@@ -402,6 +393,46 @@ int output_redirect(char* backargv[argc+1]){
 	}
 	/*printf("%d",fd);*/
 	if(dup2(fd,STDOUT_FILENO) < 0)    {
+        close(fd);
+        return 1; 
+    }
+	backargv[redircet_sign]= NULL;
+	return fd;
+
+}
+
+int input_redirect(char* backargv[argc+1]){
+
+	int i;
+	int redircet_sign;
+
+    for(i=0;i<argc;i++){
+		if(backargv[i]!=NULL){
+			if(strcmp(backargv[i],"<") == 0){
+				redircet_sign = i; /*找出输出重定向符号的位置*/
+			};
+		}
+	}
+/*这时的redircet_sign就是输出符号的分隔区域，那么后面的应该就是输出文件的路径*/
+
+/* 输出重定向的话，那么，argv[redircet_sign+1]肯定是文件路径，argv[redircet_sign]是>符号*/
+
+	int fd;
+    if(backargv[redircet_sign+1]==NULL){
+		backargv[redircet_sign+1] =(char *)malloc(9);
+     	backargv[redircet_sign+1]="/dev/null";
+        printf("without input infile path,default /dev/null\n");
+    };
+
+	fd = open(backargv[redircet_sign+1],O_RDONLY);
+
+	if(fd <0){
+		printf("file open error\n");
+
+		return 1;
+	}
+
+	if(dup2(fd,STDIN_FILENO) < 0)    {
         close(fd);
         return 1; 
     }
