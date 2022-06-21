@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "apue.h"
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -36,7 +35,7 @@ main(void)
 	int		status;
 
 	if (fputs(command_prompt, stdout) == EOF){
-		err_sys("output error");
+		printf("output error\n");
 	};
 	
 	
@@ -63,13 +62,13 @@ main(void)
 		};
 
 		if (fputs(command_prompt, stdout) == EOF)
-			err_sys("output error");
+			printf("output error\n");
 
 	};
 	
 
 	if (ferror(stdin))
-		err_sys("input error");
+		printf("input error\n");
 
 	exit(0);
 }
@@ -91,14 +90,8 @@ void splitcmd(char *buf){
 
 
 	argc = 0;
-	/*构造命令数组，以单引号和空格分隔*/
-	if (*backbuf == '\'') {
-		backbuf++;
-		delim = strchr(backbuf, '\'');/*如果是以单引号开头的话，buf++相当于略过，然后找到下一个单引号的位置*/
-	}
-	else {
+	/*构造命令数组，以e空格分隔*/
 		delim = strchr(backbuf, ' ');
-	}
 	
 	while (delim) {
 		argv[argc++] = backbuf;   /*将字符数组赋给argv的第几个元素，然后用\0截断，这样就只保留两个\0之间的字符*/
@@ -137,7 +130,7 @@ void foreground(){
 	char intempbuf[1];
 
     if(pipe(pipefd)<0) /*为了从子进程将fd传到父进程，然后父进程关闭fd*/
-        err_sys("pipe error");
+        printf("pipe error\n");
 	int i;
 	for(i=0;i<argc;i++){   /*备份一下argv，因为要进行修改*/
 		int length = strlen(argv[i]);
@@ -156,7 +149,7 @@ void foreground(){
     
     
 	if ((pid = fork()) < 0) {
-		err_sys("fork error");
+		printf("fork error\n");
 	} else if (pid == 0) {		/* child */
 
 		if(in_redirect){
@@ -180,11 +173,11 @@ void foreground(){
 		};
 		if(in_redirect){
 				execvp(inbackargv[0], inbackargv);
-				err_ret("couldn't execute: %s", inbackargv[0]);
+				printf("couldn't execute: %s\n", inbackargv[0]);
 		}else{
 
 				execvp(outbackargv[0], outbackargv);
-				err_ret("couldn't execute: %s", outbackargv[0]);
+				printf("couldn't execute: %s\n", outbackargv[0]);
 		};
     	if (outfd != STDOUT_FILENO) {
     		    close(outfd); 
@@ -204,7 +197,7 @@ void foreground(){
     
 
 	if ((pid = waitpid(pid, NULL, 0)) < 0)
-		err_sys("waitpid error");
+		printf("waitpid error\n");
 
 	if(out_redirect){
         close(pipefd[1]);
@@ -301,10 +294,10 @@ void background(){
 	}
 
 	if ((pid = fork()) < 0) {
-		err_sys("fork error");
+		printf("fork error\n");
 	} else if (pid == 0) {		/* first child */
 		if ((pid = fork()) < 0)
-			err_sys("fork error");
+			printf("fork error\n");
 		else if (pid > 0)
 			exit(0);	/* parent from second fork == first child */
 
@@ -329,19 +322,19 @@ void background(){
 
 		if(in_redirect){
 				execvp(inbackargv[0], inbackargv);
-				err_ret("couldn't execute: %s", inbackargv[0]);
+				printf("couldn't execute: %s\n", inbackargv[0]);
 		}else{
 
 				execvp(outbackargv[0], outbackargv);
-				err_ret("couldn't execute: %s", outbackargv[0]);
+				printf("couldn't execute: %s\n", outbackargv[0]);
 		};
 
-		exit(0);
+		exit(1);
 	}
 
 
 	if (waitpid(pid, NULL, 0) != pid)	/* wait for first child */
-		err_sys("waitpid error");
+		printf("waitpid error\n");
 
 	int j;
 	for(j=0;j<argc-1;j++){
